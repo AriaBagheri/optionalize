@@ -1,0 +1,8 @@
+[package]
+name = "optionalize"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+optionalize-macro = {path = "./optionalize-macro"}
+optionalize-core = { path = "./optionalize-core" }
