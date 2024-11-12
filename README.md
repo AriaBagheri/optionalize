@@ -14,7 +14,7 @@ Add `optionalize` to your `Cargo.toml`:
 
 ```toml
 [dependencies]
-optionalize = { git = "" }
+optionalize = { git = "https://github.com/AriaBagheri/optionalize.git" }
 ```
 
 > **Note:** Ensure this path points to where `optionalize` is located in your project. You can adjust it based on your directory structure.
