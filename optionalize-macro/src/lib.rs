@@ -52,38 +52,58 @@ pub fn derive_optionalize(input: TokenStream) -> TokenStream {
             .to_compile_error()
             .into();
     };
-
-    // Create fields with Option types
-    let optional_fields = fields.iter().map(|field| {
-        let field_name = &field.ident;
-        let field_type = &field.ty;
-
-        let mut ignore_field = false;
-
+    let fields = fields.into_iter().map(|field| {
+        let mut is_optional = false;
+        if let Type::Path(type_path) = &field.ty {
+            is_optional = type_path.path.segments.last().map(|f| f.ident == "Option").unwrap_or(false);
+        }
         for attr in &field.attrs {
             match &attr.meta {
                 Meta::Path(path) if path.is_ident("optionalize_ignore") => {
-                    ignore_field = true; // Mark this field to be ignored
-                },
+                    return (field, true, is_optional);
+                }
                 _ => {}
             }
         }
+        return (field, false, is_optional);
+    });
+    // Create fields with Option types
+    let optional_fields = fields.clone().map(|(field, is_ignored, is_optional)| {
+        let field_name = &field.ident;
+        let field_type = &field.ty;
+        match (is_ignored, is_optional) {
+            (false, false) => quote! { #field_name: Option<#field_type> }, // Option<T>
+            (false, true) => quote! { #field_name: #field_type }, // Option<T>
+            (true, false) => quote! { #field_name: #field_type }, // T
+            (true, true) => quote! { #field_name: #field_type}, // Option<T>
+        }
+    });
 
-        // Check if the field is already an Option<T>
-        if let Type::Path(TypePath { path, .. }) = field_type {
-            if ignore_field || path.segments.last().map(|s| s.ident == "Option").unwrap_or(false) {
-                // Field is already an Option<T>, keep it as is
-                quote! { #field_name: #field_type }
-            } else if type_implements_optionalize(field_type) {
-                // If the field type implements OptionalizeTrait, use Option<FieldType::Optional>
-                quote! { #field_name: Option<<#field_type as OptionalizeTrait>::Optional> }
-            } else {
-                // Wrap the field type in Option<T>
-                quote! { #field_name: Option<#field_type> }
-            }
-        } else {
-            // Wrap non-path types (like tuples) in Option<T>
-            quote! { #field_name: Option<#field_type> }
+    let to_active_model_fields = fields.map(|(field, is_ignored, is_optional)| {
+        let field_name = &field.ident;
+        let field_type = &field.ty;
+        match (is_ignored, is_optional) {
+            (true, false) => {
+                quote! {
+                    #field_name: sea_orm::ActiveValue::Unchanged(self.#field_name)
+                }
+            },
+            (false, false) => {
+                quote! {
+                    #field_name: match self.#field_name {
+                        Some(value) => sea_orm::ActiveValue::Set(value),
+                        None => sea_orm::ActiveValue::NotSet
+                    }
+                }
+            },
+            (_, _) => {
+                quote! {
+                    #field_name: match self.#field_name {
+                        Some(value) => sea_orm::ActiveValue::Set(Some(value)),
+                        None => sea_orm::ActiveValue::NotSet
+                    }
+                }
+            },
         }
     });
 
@@ -94,6 +114,15 @@ pub fn derive_optionalize(input: TokenStream) -> TokenStream {
         pub struct #optional_struct_name {
             #( #optional_fields, )*
         }
+
+        impl #optional_struct_name {
+            pub fn to_active(self) -> ActiveModel {
+                ActiveModel {
+                    #( #to_active_model_fields, )*
+                }
+            }
+        }
+
         impl OptionalizeTrait for #struct_name {
             type Optional = #optional_struct_name;
         }
@@ -101,18 +130,3 @@ pub fn derive_optionalize(input: TokenStream) -> TokenStream {
 
     TokenStream::from(expanded)
 }
-
-fn type_implements_optionalize(field_type: &Type) -> bool {
-    match field_type {
-        Type::Path(TypePath { path, .. }) => {
-            // Primitive types and standard library types that we assume don't implement `OptionalizeTrait`
-            let segment = path.segments.last().unwrap().ident.to_string();
-            matches!(
-                segment.as_str(),
-                "i32" | "i64" | "u32" | "u64" | "f32" | "f64" | "String" | "bool"
-            ) == false
-        }
-        _ => false,
-    }
-}
-
