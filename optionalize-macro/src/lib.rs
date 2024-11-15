@@ -30,7 +30,7 @@
 
 use proc_macro::TokenStream;
 use quote::quote;
-use syn::{parse_macro_input, DeriveInput, Data, Type, TypePath, Meta};
+use syn::{parse_macro_input, DeriveInput, Data, Type, Meta};
 
 #[proc_macro_derive(Optionalize, attributes(optionalize_ignore))]
 pub fn derive_optionalize(input: TokenStream) -> TokenStream {
@@ -81,7 +81,6 @@ pub fn derive_optionalize(input: TokenStream) -> TokenStream {
 
     let to_active_model_fields = fields.map(|(field, is_ignored, is_optional)| {
         let field_name = &field.ident;
-        let field_type = &field.ty;
         match (is_ignored, is_optional) {
             (true, false) => {
                 quote! {
