@@ -109,7 +109,7 @@ pub fn derive_optionalize(input: TokenStream) -> TokenStream {
     // Generate the output tokens
     let expanded = quote! {
 
-        #[derive(Debug, Deserialize)]
+        #[derive(Debug, Deserialize, Clone)]
         pub struct #optional_struct_name {
             #( #optional_fields, )*
         }
